@@ -1,0 +1,235 @@
+---
+title: "Reply to Koplenig"
+subtitle: "Data analysis"
+author: "Henri Kauhanen, Sarah Einhaus & George Walkden"
+date: "2022"
+output: pdf_document
+numbersections: true
+---
+
+
+# Load data
+
+```{r}
+data <- read.csv("../data/data.csv")
+```
+
+
+# Descriptive statistics
+
+## General characteristics of the dataset
+
+There are a total of
+
+```{r}
+nrow(data)
+```
+
+languages in the dataset. However, not every language has data for each column of the data frame. The number of vehicular languages is
+
+```{r}
+nrow(data[data$vehicularity==1, ])
+```
+
+Of these,
+
+```{r}
+nrow(data[data$vehicularity==1 & is.na(data$L2prop), ])
+```
+
+do not have an L2 proportion estimate.
+
+The number of non-vehicular languages is
+```{r}
+nrow(data[data$vehicularity==0, ])
+```
+
+These all have an L2 proportion estimate, either real or imputed.
+
+## How many non-vehiculars have an imputed L2 proportion?
+
+The number of non-vehicular languages with a zero L2 proportion is
+
+```{r}
+nv0 <- nrow(data[data$vehicularity==0 & data$L2prop==0, ])
+nv0
+```
+
+Of these, Ethnologue actually provides a numerical zero L2 proportion estimate for
+
+```{r}
+nv0E <- nrow(data[data$vehicularity==0 & data$L2prop==0 & data$ethnologue_L2_users==TRUE, ])
+nv0E
+```
+
+languages. The rest have been imputed.
+
+## In how many cases is the data imputation wrong?
+
+Ethnologue notes that the language is used as an L2 by speakers of some other set of languages (without giving numerical estimates) in
+
+```{r}
+asL2 <- nrow(data[data$vehicularity==0 & data$L2prop==0 & !is.na(data$used_as_L2_by), ])
+asL2
+```
+
+of these cases. In other words, the data imputation is definitely wrong for
+
+```{r}
+asL2/(nv0 - nv0E)
+```
+
+of the dataset.
+
+
+# Remove uncertain non-vehiculars
+
+We now remove uncertain non-vehicular languages, i.e. all zero-L2-proportion non-vehicular languages except the
+
+```{r}
+nv0E
+```
+
+for which Ethnologue actually gives a zero L2 proportion estimate:
+
+```{r}
+data2 <- rbind(data[data$vehicularity==1, ],
+	       data[data$vehicularity==0 & data$L2prop>0, ],
+	       data[data$vehicularity==0 & data$L2prop==0 & data$ethnologue_L2_users==TRUE, ])
+```
+
+There are
+
+```{r}
+nrow(data2)
+```
+
+languages in this subset of the original data. However, for some languages the L2 proportion estimate is not available. These are all vehicular languages (as indeed makes sense, for in Koplenig's data imputation scheme, uncertain non-vehicular languages always receive a zero L2 proportion estimate, not NA):
+
+```{r}
+tmp <- data2[is.na(data2$L2prop), ]
+nrow(tmp)
+table(tmp$vehicularity)
+```
+
+These languages therefore do not figure in the L2 proportion regressions, although they do figure in the population size regressions; for population size is available for all languages in the sample:
+
+```{r}
+nrow(data2[is.na(data2$Population), ])
+```
+
+
+# Histogram of L2 speaker proportion
+
+```{r, warning=FALSE, message=FALSE}
+library(ggplot2)
+
+# give nicer names to vehicularity column levels
+datap <- data2
+datap$vehicularity <- factor(datap$vehicularity, 
+			     labels=c("non-vehicular languages", "vehicular languages"))
+
+# construct plot
+g <- ggplot(datap, aes(x=L2prop)) + geom_histogram() + facet_wrap(.~vehicularity)
+g <- g + theme_bw() + theme(axis.text=element_text(color="black"))
+g <- g + theme(strip.background=element_blank(), strip.text=element_text(size=11))
+g <- g + ylab("") + xlab("proportion of L2 speakers")
+
+# save as pdf
+pdf("../plots/histogram.pdf", height=3, width=6)
+g
+dev.off()
+
+# also print it here
+g
+```
+
+
+# Regressions
+
+## Morphological complexity
+
+```{r}
+mod <- lm(MC~L2prop+log(Population), data2)
+summary(mod)
+```
+
+Adding an interaction does not improve model:
+
+```{r}
+modb <- lm(MC~L2prop*log(Population), data2)
+AIC(mod)
+AIC(modb)
+```
+
+## Morphological complexity, $\geq 6$ features
+
+```{r}
+mod6 <- lm(MC~L2prop+log(Population), data2[data2$NumChap>=6, ])
+summary(mod6)
+```
+
+Again, adding an interaction does not improve model:
+
+```{r}
+mod6b <- lm(MC~L2prop*log(Population), data2[data2$NumChap>=6, ])
+AIC(mod6)
+AIC(mod6b)
+```
+
+
+## Information-theoretic complexity
+
+```{r}
+modIC <- lm(H~L2prop+log(Population), data2)
+summary(modIC)
+```
+
+Adding an interaction does not improve model:
+
+```{r}
+modICb <- lm(H~L2prop*log(Population), data2)
+AIC(modIC)
+AIC(modICb)
+```
+
+
+# Results plot
+
+```{r, warning=FALSE, message=FALSE}
+# construct first plot
+g1 <- ggplot(data2, aes(x=L2prop, y=MC)) + geom_point() + geom_smooth(method=lm)
+g1 <- g1 + xlab("proportion of L2 speakers") + ylab("morphological complexity")
+g1 <- g1 + theme_bw()
+g1 <- g1 + theme(axis.text=element_text(color="black"))
+g1 <- g1 + ggtitle("A")
+
+# construct second plot
+g2 <- ggplot(data2, aes(x=L2prop, y=H)) + geom_point() + geom_smooth(method=lm)
+g2 <- g2 + xlab("proportion of L2 speakers") + ylab("information-theoretic complexity")
+g2 <- g2 + theme_bw()
+g2 <- g2 + theme(axis.text=element_text(color="black"))
+g2 <- g2 + ggtitle("B")
+
+# construct third plot
+g3 <- ggplot(data2, aes(x=log(Population), y=MC)) + geom_point() + geom_smooth(method=lm)
+g3 <- g3 + xlab("log(population size)") + ylab("morphological complexity")
+g3 <- g3 + theme_bw()
+g3 <- g3 + theme(axis.text=element_text(color="black"))
+g3 <- g3 + ggtitle("C")
+
+# construct fourth plot
+g4 <- ggplot(data2, aes(x=log(Population), y=H)) + geom_point() + geom_smooth(method=lm)
+g4 <- g4 + xlab("log(population size)") + ylab("information-theoretic complexity")
+g4 <- g4 + theme_bw()
+g4 <- g4 + theme(axis.text=element_text(color="black"))
+g4 <- g4 + ggtitle("D")
+
+# pdf out
+pdf("../plots/result.pdf", height=6, width=6)
+grid.arrange(g1, g2, g3, g4, nrow=2, ncol=2)
+dev.off()
+
+# print here, too
+grid.arrange(g1, g2, g3, g4, nrow=2, ncol=2)
+```
