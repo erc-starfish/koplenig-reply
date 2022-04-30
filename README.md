@@ -20,7 +20,7 @@ rmarkdown::render("analysis.Rmd", output_file="../analysis.pdf")
 
 The report will be outputted in `analysis.pdf`; additionally, plots are saved in the `plots/` folder.
 
-R packages `ggplot2`, `gridExtra` and `rmarkdown` are required.
+R packages `ggplot2`, `gridExtra` and `rmarkdown` are required. Tested using R version 4.0.4.
 
 
 ## Acknowledgements
