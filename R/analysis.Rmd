@@ -58,7 +58,8 @@ nv0
 Of these, Ethnologue actually provides a numerical zero L2 proportion estimate for
 
 ```{r}
-nv0E <- nrow(data[data$vehicularity==0 & data$L2prop==0 & data$ethnologue_L2_users==TRUE, ])
+nv0E <- nrow(data[data$vehicularity==0 & data$L2prop==0 & 
+	     data$ethnologue_L2_users==TRUE, ])
 nv0E
 ```
 
@@ -197,6 +198,8 @@ AIC(modICb)
 # Results plot
 
 ```{r, warning=FALSE, message=FALSE}
+library(gridExtra)
+
 # construct first plot
 g1 <- ggplot(data2, aes(x=L2prop, y=MC)) + geom_point() + geom_smooth(method=lm)
 g1 <- g1 + xlab("proportion of L2 speakers") + ylab("morphological complexity")
