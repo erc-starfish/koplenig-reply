@@ -21,3 +21,8 @@ rmarkdown::render("analysis.Rmd", output_file="../analysis.pdf")
 The report will be outputted in `analysis.pdf`; additionally, plots are saved in the `plots/` folder.
 
 R packages `ggplot2`, `gridExtra` and `rmarkdown` are required.
+
+
+## Acknowledgements
+
+This research was funded by the European Research Council as part of project STARFISH (851423). We are also grateful to the Department of Linguistics of the University of Konstanz for making Ethnologue available to us.
