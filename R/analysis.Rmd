@@ -113,10 +113,22 @@ nrow(tmp)
 table(tmp$vehicularity)
 ```
 
-These languages therefore do not figure in the L2 proportion regressions, although they do figure in the population size regressions; for population size is available for all languages in the sample:
+Since we need L2 proportion in all our regression, we remove these NA languages from the sample:
 
 ```{r}
-nrow(data2[is.na(data2$Population), ])
+data2 <- data2[!is.na(data2$L2prop), ]
+```
+
+The remaining sample has
+
+```{r}
+nrow(data2)
+```
+
+languages. However, the two complexity measures, morphological complexity and information-theoretic complexity, are available for different subsets of languages:
+```{r}
+nrow(data2[!is.na(data2$MC), ])
+nrow(data2[!is.na(data2$H), ])
 ```
 
 
@@ -155,6 +167,12 @@ mod <- lm(MC~L2prop+log(Population), data2)
 summary(mod)
 ```
 
+The number of data points in this regression:
+
+```{r}
+length(mod$fitted.values)
+```
+
 Adding an interaction does not improve model:
 
 ```{r}
@@ -168,6 +186,12 @@ AIC(modb)
 ```{r}
 mod6 <- lm(MC~L2prop+log(Population), data2[data2$NumChap>=6, ])
 summary(mod6)
+```
+
+The number of data points in this regression:
+
+```{r}
+length(mod6$fitted.values)
 ```
 
 Again, adding an interaction does not improve model:
@@ -184,6 +208,12 @@ AIC(mod6b)
 ```{r}
 modIC <- lm(H~L2prop+log(Population), data2)
 summary(modIC)
+```
+
+The number of data points in this regression:
+
+```{r}
+length(modIC$fitted.values)
 ```
 
 Adding an interaction does not improve model:
