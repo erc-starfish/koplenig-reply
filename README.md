@@ -25,4 +25,4 @@ R packages `ggplot2`, `gridExtra` and `rmarkdown` are required. Tested using R v
 
 ## Acknowledgements
 
-This research was funded by the European Research Council as part of project STARFISH (851423). We are also grateful to the Department of Linguistics of the University of Konstanz for making Ethnologue available to us.
+The work reported here was funded by the European Research Council as part of project STARFISH (851423). Access to Ethnologue was funded by the Communication, Information, Media Centre (KIM) of the University of Konstanz.
