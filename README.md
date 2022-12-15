@@ -24,7 +24,7 @@ This takes about a minute on a modern computer (tested using R version 4.0.4).
 
 A number of R packages are needed; to install them, type:
 
-```{r}
+```r
 install.packages(c("lme4", "lmerTest", "mice", "broom.mixed", "lattice", "effects", "gridExtra"))
 ```
 
