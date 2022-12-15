@@ -1,6 +1,9 @@
 # Explanation
 
-`data.csv` constitutes our extension of Koplenig's original dataset, which was downloaded on 2 April 2022 from https://royalsocietypublishing.org/doi/suppl/10.1098/rsos.181274 and converted to CSV.
+The data reside in two CSV files which are merged and preprocessed by our analysis scripts:
+
+* `rsos181274supp2.csv`: the original dataset from Koplenig (2019), downloaded on 2 April 2022 from https://royalsocietypublishing.org/doi/suppl/10.1098/rsos.181274 and converted to CSV.
+* `koplenig-reply.csv`: our additions.
 
 We add the following columns:
 

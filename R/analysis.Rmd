@@ -1,17 +1,82 @@
 ---
-title: "Reply to Koplenig"
-subtitle: "Data analysis"
+title: "Supplementary material"
+subtitle: "Language structure is influenced by the proportion of non-native speakers: A reply to Koplenig (2019)"
 author: "Henri Kauhanen, Sarah Einhaus & George Walkden"
-date: "2022"
+date: "15 December 2022"
 output: pdf_document
 numbersections: true
+toc: true
+papersize: a4
 ---
 
+# Introduction
 
-# Load data
+This supplementary materials document provides all the statistical analyses reported in the paper, plus additional analyses that include interaction effects and a second imputation analysis in which a single imputation model is used to regress both types of complexity.
+
+Tested with R version 4.0.4.
+
+
+# Prerequisites
+
+The following R packages are required:
+
+```{r, message=FALSE, warning=FALSE}
+library(lme4)
+library(lmerTest)
+library(mice)
+library(broom.mixed)
+library(lattice)
+library(effects)
+library(gridExtra)
+```
+
+
+# Data preprocessing
+
+The raw data resides in two files (Koplenig's original dataset and our additions) in the `../data` directory. We first merge these two datasets and carry out a few transformations that will facilitate data analysis.
 
 ```{r}
-data <- read.csv("../data/data.csv")
+kop <- read.csv("../data/rsos181274supp2.csv", stringsAsFactors=FALSE)
+new <- read.csv("../data/koplenig-reply.csv", stringsAsFactors=FALSE)
+new <- new[, c("ISO", "ethnologue_L2_users", "used_as_L2_by", "notes")]
+```
+
+Format the data slightly differently:
+
+```{r}
+for (i in 1:nrow(new)) {
+  tmp <- paste(stringr::str_extract_all(new[i, ]$used_as_L2_by,
+                                        pattern="\\[[a-z]+\\]")[[1]], collapse=":")
+  new[i, ]$used_as_L2_by <- stringr::str_replace_all(tmp, pattern="[\\[\\]]", "")
+}
+new$used_as_L2_by <- ifelse(new$used_as_L2_by=="", NA, new$used_as_L2_by)
+```
+
+Merge the two dataframes:
+
+```{r}
+data <- merge(kop, new, by="ISO")
+```
+
+For some languages, the area is missing, but these are read in as empty strings rather than as missing values. Need to fix that:
+
+```{r}
+data$Area <- ifelse(data$Area == "", NA, data$Area)
+data$Family <- ifelse(data$Family == "", NA, data$Family)
+```
+
+Make sure language family and area are factors (important for imputation model and regression analysis):
+
+```{r}
+data$Family <- factor(data$Family)
+data$Area <- factor(data$Area)
+```
+
+Encode the logarithm of population size and the logarithm of the range size as variables in the dataframe (useful for some of the regressions and plots):
+
+```{r}
+data$logPop <- log(data$Population)
+data$logRangesize <- log(data$Rangesize)
 ```
 
 
@@ -37,14 +102,20 @@ Of these,
 nrow(data[data$vehicularity==1 & is.na(data$L2prop), ])
 ```
 
-do not have an L2 proportion estimate.
+do not have an L2 proportion estimate (either real or imputed).
 
 The number of non-vehicular languages is
 ```{r}
 nrow(data[data$vehicularity==0, ])
 ```
 
-These all have an L2 proportion estimate, either real or imputed.
+These all have an L2 proportion estimate, either real or imputed:
+
+```{r}
+nrow(data[data$vehicularity==0 & is.na(data$L2prop), ])
+```
+
+
 
 ## How many non-vehiculars have an imputed L2 proportion?
 
@@ -59,7 +130,7 @@ Of these, Ethnologue actually provides a numerical zero L2 proportion estimate f
 
 ```{r}
 nv0E <- nrow(data[data$vehicularity==0 & data$L2prop==0 & 
-	     data$ethnologue_L2_users==TRUE, ])
+             data$ethnologue_L2_users==TRUE, ])
 nv0E
 ```
 
@@ -70,7 +141,8 @@ languages. The rest have been imputed.
 Ethnologue notes that the language is used as an L2 by speakers of some other set of languages (without giving numerical estimates) in
 
 ```{r}
-asL2 <- nrow(data[data$vehicularity==0 & data$L2prop==0 & !is.na(data$used_as_L2_by), ])
+asL2 <- nrow(data[data$vehicularity==0 & data$L2prop==0 & 
+             !is.na(data$used_as_L2_by), ])
 asL2
 ```
 
@@ -83,121 +155,150 @@ asL2/(nv0 - nv0E)
 of the dataset.
 
 
-# Remove uncertain non-vehiculars
 
-We now remove uncertain non-vehicular languages, i.e. all zero-L2-proportion non-vehicular languages except the
+# Remove zero-imputation from uncertain non-vehiculars
 
-```{r}
-nv0E
-```
-
-for which Ethnologue actually gives a zero L2 proportion estimate:
+We now remove the zero-imputed L2 proportions from uncertain non-vehicular languages:
 
 ```{r}
-data2 <- rbind(data[data$vehicularity==1, ],
-	       data[data$vehicularity==0 & data$L2prop>0, ],
-	       data[data$vehicularity==0 & data$L2prop==0 & data$ethnologue_L2_users==TRUE, ])
+data2 <- data
+data2$L2prop <- ifelse(data2$vehicularity==0 & data2$L2prop==0 & 
+                       data2$ethnologue_L2_users==FALSE, NA, data2$L2prop)
 ```
 
-There are
+There are now
 
 ```{r}
-nrow(data2)
+nrow(data2[!is.na(data2$L2prop), ])
 ```
 
-languages in this subset of the original data. However, for some languages the L2 proportion estimate is not available. These are all vehicular languages (as indeed makes sense, for in Koplenig's data imputation scheme, uncertain non-vehicular languages always receive a zero L2 proportion estimate, not NA):
+languages with a non-`NA` L2 proportion. Of these,
 
 ```{r}
-tmp <- data2[is.na(data2$L2prop), ]
-nrow(tmp)
-table(tmp$vehicularity)
+nrow(data2[!is.na(data2$L2prop) & data2$vehicularity==1, ])
 ```
 
-Since we need L2 proportion in all our regression, we remove these NA languages from the sample:
+are vehicular and
 
 ```{r}
-data2 <- data2[!is.na(data2$L2prop), ]
+nrow(data2[!is.na(data2$L2prop) & data2$vehicularity==0, ])
 ```
 
-The remaining sample has
+non-vehicular.
 
-```{r}
-nrow(data2)
-```
+We point out that there are missing values also in the response variables, morphological complexity and information-theoretic complexity. In other words, the two complexity measures are available for different subsets of languages:
 
-languages. However, the two complexity measures, morphological complexity and information-theoretic complexity, are available for different subsets of languages:
 ```{r}
 nrow(data2[!is.na(data2$MC), ])
 nrow(data2[!is.na(data2$H), ])
 ```
 
+In particular, in the subset of languages with a non-missing L2 proportion, these numbers are:
 
-# Histogram of L2 speaker proportion
-
-```{r, warning=FALSE, message=FALSE}
-library(ggplot2)
-
-# give nicer names to vehicularity column levels
-datap <- data2
-datap$vehicularity <- factor(datap$vehicularity, 
-			     labels=c("non-vehicular languages", "vehicular languages"))
-
-# construct plot
-g <- ggplot(datap, aes(x=L2prop)) + geom_histogram() + facet_wrap(.~vehicularity)
-g <- g + theme_bw() + theme(axis.text=element_text(color="black"))
-g <- g + theme(strip.background=element_blank(), strip.text=element_text(size=11))
-g <- g + ylab("") + xlab("proportion of L2 speakers")
-
-# save as pdf
-pdf("../plots/histogram.pdf", height=3, width=6)
-g
-dev.off()
-
-# also print it here
-g
+```{r}
+nrow(data2[!is.na(data2$L2prop) & !is.na(data2$MC), ])
+nrow(data2[!is.na(data2$L2prop) & !is.na(data2$H), ])
 ```
 
 
-# Regressions
+# Overall missingness in the data
+
+The variables in the dataset now have this many missing values:
+
+```{r}
+nrow(data2[is.na(data2$Family), ])
+nrow(data2[is.na(data2$Area), ])
+nrow(data2[is.na(data2$MC), ])
+nrow(data2[is.na(data2$H), ])
+nrow(data2[is.na(data2$L2prop), ])
+nrow(data2[is.na(data2$Population), ])
+nrow(data2[is.na(data2$Rangesize), ])
+```
+
+
+# Family and area coverage
+
+In the entire dataset, there are
+
+```{r}
+length(unique(data2$Family))
+```
+
+unique language families and
+
+```{r}
+length(unique(data2$Area))
+```
+
+unique linguistic areas. The three most frequent families have a fraction of
+
+```{r}
+sum(sort(as.numeric(table(data2$Family)), 
+	 decreasing=TRUE)[1:3])/sum(!is.na(data2$Family))
+```
+
+of the languages. The three most frequent areas have a fraction of
+
+```{r}
+sum(sort(as.numeric(table(data2$Area)), 
+	 decreasing=TRUE)[1:3])/sum(!is.na(data2$Area))
+```
+
+of the languages (not counting languages for which area is missing).
+
+The above statistics for our reduced sample are:
+
+```{r}
+data2b <- data2
+data2b <- data2b[!is.na(data2b$L2prop), ]
+length(unique(data2b$Family))
+length(unique(data2b$Area))
+sum(sort(as.numeric(table(data2b$Family)), 
+	 decreasing=TRUE)[1:3])/sum(!is.na(data2b$Family))
+sum(sort(as.numeric(table(data2b$Area)), 
+	 decreasing=TRUE)[1:3])/sum(!is.na(data2b$Area))
+```
+
+
+# Complete cases analysis
+
+In the complete cases analysis, we do not impute any missing values.
 
 ## Morphological complexity
 
 ```{r}
-mod <- lm(MC~L2prop+log(Population), data2)
+mod <- lmer(MC~L2prop+logPop+(1|Family)+(1|Area), data2)
 summary(mod)
 ```
 
-The number of data points in this regression:
+Adding an interaction between L2 proportion and population size leads to a worse model:
 
 ```{r}
-length(mod$fitted.values)
-```
-
-Adding an interaction does not improve model:
-
-```{r}
-modb <- lm(MC~L2prop*log(Population), data2)
+modb <- lmer(MC~L2prop*logPop+(1|Family)+(1|Area), data2)
 AIC(mod)
 AIC(modb)
 ```
 
-## Morphological complexity, $\geq 6$ features
+
+## Morphological complexity, $\geq$ 6 features
+
+When only looking at languages in which at least 6 features are available for the determination of morphological complexity, we cannot include the same random effects structure because it leads to a singular fit:
 
 ```{r}
-mod6 <- lm(MC~L2prop+log(Population), data2[data2$NumChap>=6, ])
+mod6 <- lmer(MC~L2prop+logPop+(1|Family)+(1|Area), data2[data2$NumChap>=6, ])
+```
+
+Apparently, this is because the area is missing for many languages. Hence we run the following, simpler model instead:
+
+```{r}
+mod6 <- lmer(MC~L2prop+logPop+(1|Family), data2[data2$NumChap>=6, ])
 summary(mod6)
 ```
 
-The number of data points in this regression:
+Adding an interaction between L2 proportion and population size again leads to a worse model:
 
 ```{r}
-length(mod6$fitted.values)
-```
-
-Again, adding an interaction does not improve model:
-
-```{r}
-mod6b <- lm(MC~L2prop*log(Population), data2[data2$NumChap>=6, ])
+mod6b <- lmer(MC~L2prop*logPop+(1|Family), data2[data2$NumChap>=6, ])
 AIC(mod6)
 AIC(mod6b)
 ```
@@ -205,64 +306,285 @@ AIC(mod6b)
 
 ## Information-theoretic complexity
 
+For information-theoretic complexity, the random effects structure with a random intercept for area again leads to a singular fit:
+
 ```{r}
-modIC <- lm(H~L2prop+log(Population), data2)
+modIC <- lmer(H~L2prop+logPop+(1|Family)+(1|Area), data2)
+```
+
+Hence we only include a random intercept for family:
+
+```{r}
+modIC <- lmer(H~L2prop+logPop+(1|Family), data2)
 summary(modIC)
 ```
 
-The number of data points in this regression:
+Adding an interaction between L2 proportion and population size leads to a worse model:
 
 ```{r}
-length(modIC$fitted.values)
-```
-
-Adding an interaction does not improve model:
-
-```{r}
-modICb <- lm(H~L2prop*log(Population), data2)
+modICb <- lmer(H~L2prop*logPop+(1|Family), data2)
 AIC(modIC)
 AIC(modICb)
 ```
 
 
-# Results plot
+# Multiple imputation analysis
 
-```{r, warning=FALSE, message=FALSE}
-library(gridExtra)
+## Preparatory steps
 
-# construct first plot
-g1 <- ggplot(data2, aes(x=L2prop, y=MC)) + geom_point() + geom_smooth(method=lm)
-g1 <- g1 + xlab("proportion of L2 speakers") + ylab("morphological complexity")
-g1 <- g1 + theme_bw()
-g1 <- g1 + theme(axis.text=element_text(color="black"))
-g1 <- g1 + ggtitle("A")
+We provide two different kinds of analysis: first, one which has separate imputation models for the two kinds of complexities, and second, an analysis which has a single imputation model for both complexities.
 
-# construct second plot
-g2 <- ggplot(data2, aes(x=L2prop, y=H)) + geom_point() + geom_smooth(method=lm)
-g2 <- g2 + xlab("proportion of L2 speakers") + ylab("information-theoretic complexity")
-g2 <- g2 + theme_bw()
-g2 <- g2 + theme(axis.text=element_text(color="black"))
-g2 <- g2 + ggtitle("B")
+The rationale for constructing separate imputation models (the analysis reported in the main paper) is that the number of languages for which both morphological complexity and information-theoretic complexity are attested is rather small:
 
-# construct third plot
-g3 <- ggplot(data2, aes(x=log(Population), y=MC)) + geom_point() + geom_smooth(method=lm)
-g3 <- g3 + xlab("log(population size)") + ylab("morphological complexity")
-g3 <- g3 + theme_bw()
-g3 <- g3 + theme(axis.text=element_text(color="black"))
-g3 <- g3 + ggtitle("C")
+```{r}
+nrow(data2[!is.na(data2$MC), ])
+nrow(data2[!is.na(data2$H), ])
+nrow(data2[!is.na(data2$MC) & !is.na(data2$H), ])
+```
 
-# construct fourth plot
-g4 <- ggplot(data2, aes(x=log(Population), y=H)) + geom_point() + geom_smooth(method=lm)
-g4 <- g4 + xlab("log(population size)") + ylab("information-theoretic complexity")
-g4 <- g4 + theme_bw()
-g4 <- g4 + theme(axis.text=element_text(color="black"))
-g4 <- g4 + ggtitle("D")
+All of our imputation models take language family as a clustering variable. The implementation in *mice* requires this as a numeric:
+
+```{r}
+datai <- data2
+datai$cluster <- as.numeric(datai$Family)
+```
+
+Also, we want to make sure that impossible L2 speaker proportions (outside the interval [0,1]) are never imputed. To do this, we take a logit transform of L2 speaker proportion:
+
+```{r}
+epsilon <- 10^-5
+datai$L2prop_t <- epsilon + (1 - 2*epsilon)*datai$L2prop
+datai$L2prop_t <- log(datai$L2prop_t/(1 - datai$L2prop_t))
+```
+
+
+## Separate imputation models
+
+### Morphological complexity
+
+We need the following variables in this imputation model:
+
+```{r}
+datai_MC <- datai[, c("ISO", "Language", "Family", "Area", "L2prop_t", "MC",
+                      "logPop", "logRangesize", "cluster")]
+```
+
+We first set up the predictor matrix. L2 speaker proportion is imputed using morphological complexity, logarithmic population size and logarithmic range size, with language family as a clustering variable. We do not impute other missing values; we have tried to do so, but the model becomes too complicated to run.
+
+```{r}
+pred_MC <- make.predictorMatrix(datai_MC)
+pred_MC[1:nrow(pred_MC), ] <- 0
+pred_MC["L2prop_t", ] <- c(0, 0, 0, 0, 0, 1, 1, 1, -2)
+pred_MC
+```
+
+We also need to set the imputation method:
+
+```{r}
+impmethod_MC <- character(ncol(datai_MC))
+names(impmethod_MC) <- colnames(datai_MC)
+impmethod_MC["L2prop_t"] <- "2l.lmer"
+impmethod_MC
+```
+
+We now construct the imputation model. Note that we do not need more than one iteration, as missing values are only imputed in one variable.
+
+```{r}
+imp_MC <- mice(datai_MC, method=impmethod_MC, predictorMatrix=pred_MC, maxit=1, 
+               m=100, print=FALSE, seed=202212)
+```
+
+Finally, we run the regression analysis on the $m = 100$ completed copies of the dataset:
+
+```{r}
+modImp <- with(imp_MC, lmer(MC~L2prop_t+logPop+(1|Family)+(1|Area)))
+tidy(pool(modImp))
+```
+
+For purposes of illustration, here is the regression on one of the 100 completed datasets (that is, before pooling):
+
+```{r}
+summary(modImp$analyses[[1]])
+```
+
+
+### Information-theoretic complexity
+
+We need the following variables in this imputation model:
+
+```{r}
+datai_H <- datai[, c("ISO", "Language", "Family", "Area", "L2prop_t", "H",
+                     "logPop", "logRangesize", "cluster")]
+```
+
+We first set up the predictor matrix. L2 speaker proportion is imputed using information-theoretic complexity, logarithmic population size and logarithmic range size, with language family as a clustering variable. We do not impute other missing values; we have tried to do so, but the model becomes too complicated to run.
+
+```{r}
+pred_H <- make.predictorMatrix(datai_H)
+pred_H[1:nrow(pred_H), ] <- 0
+pred_H["L2prop_t", ] <- c(0, 0, 0, 0, 0, 1, 1, 1, -2)
+pred_H
+```
+
+We also need to set the imputation method:
+
+```{r}
+impmethod_H <- character(ncol(datai_H))
+names(impmethod_H) <- colnames(datai_H)
+impmethod_H["L2prop_t"] <- "2l.lmer"
+impmethod_H
+```
+
+We now construct the imputation model. Note that we do not need more than one iteration, as missing values are only imputed in one variable.
+
+```{r}
+imp_H <- mice(datai_H, method=impmethod_H, predictorMatrix=pred_H, maxit=1, 
+              m=100, print=FALSE, seed=2202212)
+```
+
+Regression for information-theoretic complexity:
+
+```{r}
+modImpIC <- with(imp_H, lmer(H~L2prop_t+logPop+(1|Family)+(1|Area)))
+tidy(pool(modImpIC))
+```
+
+For purposes of illustration, here is the regression on one of the 100 completed datasets (that is, before pooling):
+
+```{r}
+summary(modImpIC$analyses[[1]])
+```
+
+
+## Single imputation model
+
+For the analysis with a single imputation model, we include both morphological and information-theoretic complexity:
+
+```{r}
+datai_s <- datai[, c("ISO", "Language", "Family", "Area", "L2prop_t", "MC",
+                      "H", "logPop", "logRangesize", "cluster")]
+```
+
+We first set up the predictor matrix. L2 speaker proportion is imputed using morphological complexity, information-theoretic complexity, logarithmic population size and logarithmic range size, with language family as a clustering variable. We do not impute other missing values; we have tried to do so, but the model becomes too complicated to run.
+
+```{r}
+pred_s <- make.predictorMatrix(datai_s)
+pred_s[1:nrow(pred_s), ] <- 0
+pred_s["L2prop_t", ] <- c(0, 0, 0, 0, 0, 1, 1, 1, 1, -2)
+pred_s
+```
+
+We also need to set the imputation method:
+
+```{r}
+impmethod_s <- character(ncol(datai_s))
+names(impmethod_s) <- colnames(datai_s)
+impmethod_s["L2prop_t"] <- "2l.lmer"
+impmethod_s
+```
+
+We now construct the imputation model. Note that we do not need more than one iteration, as missing values are only imputed in one variable.
+
+```{r}
+imp_s <- mice(datai_s, method=impmethod_s, predictorMatrix=pred_s, maxit=1, 
+              m=100, print=FALSE, seed=3202212)
+```
+
+Finally, we run the regression analyses on the $m = 100$ completed copies of the dataset:
+
+```{r}
+modImp_s <- with(imp_s, lmer(MC~L2prop_t+logPop+(1|Family)+(1|Area)))
+tidy(pool(modImp_s))
+modImpIC_s <- with(imp_s, lmer(H~L2prop_t+logPop+(1|Family)+(1|Area)))
+tidy(pool(modImpIC_s))
+```
+
+Example regressions:
+
+```{r}
+summary(modImp_s$analyses[[1]])
+summary(modImpIC_s$analyses[[1]])
+```
+
+
+# Plots
+
+## Histogram of L2 speaker proportion
+
+```{r, message=FALSE, warning=FALSE}
+mypar1 <- list(par.main.text=list(just="left", x=grid::unit(21.5, "mm")))
+mypar2 <- list(par.main.text=list(just="left", x=grid::unit(27.5, "mm")))
+mycol <- "azure2"
+
+g1 <- histogram(~L2prop, data2[!is.na(data2$L2prop) & data2$vehicularity==0, ], 
+                type="percent", 
+                col=mycol, xlab="L2 speaker proportion", par.settings=mypar1,
+                main=list("Non-vehicular languages", cex=1.0), nint=13)
+
+g2 <- histogram(~L2prop, data2[!is.na(data2$L2prop) & data2$vehicularity==1, ], 
+                type="percent", 
+                col=mycol, xlab="L2 speaker proportion", par.settings=mypar2,
+                main=list("Vehicular languages", cex=1.0), nint=13)
+
+# save as pdf
+pdf("../plots/histogram.pdf", height=3, width=7)
+grid.arrange(g1, g2, nrow=1, ncol=2)
+dev.off()
+```
+
+
+## Effects plots (complete cases analysis)
+
+```{r, message=FALSE, warning=FALSE}
+g1 <- plot(predictorEffect("L2prop", mod), xlab="L2 speaker proportion", 
+           ylim=c(0,1), ylab="Morphological complexity", 
+           main="A                                  ")
+g2 <- plot(predictorEffect("logPop", mod), xlab="log(population size)", 
+           ylim=c(0,1), ylab="Morphological complexity", 
+           main="B                                  ")
+g3 <- plot(predictorEffect("L2prop", modIC), xlab="L2 speaker proportion", 
+           ylim=c(1.3, 2.0), ylab="Information-theoretic complexity", 
+           main="C                                  ")
+g4 <- plot(predictorEffect("logPop", modIC), xlab="log(population size)", 
+           ylim=c(1.3, 2.0), ylab="Information-theoretic complexity", 
+           main="D                                  ")
 
 # pdf out
-pdf("../plots/result.pdf", height=6, width=6)
+pdf("../plots/result.pdf", height=7.5, width=7)
 grid.arrange(g1, g2, g3, g4, nrow=2, ncol=2)
 dev.off()
-
-# print here, too
-grid.arrange(g1, g2, g3, g4, nrow=2, ncol=2)
 ```
+
+
+## Histogram of L2 proportion coefficients in imputation analysis
+
+```{r, message=FALSE, warning=FALSE}
+mypar1 <- list(par.main.text=list(just="left", x=grid::unit(21.5, "mm")))
+mypar2 <- list(par.main.text=list(just="left", x=grid::unit(14.5, "mm")))
+mycol <- "azure2"
+
+getcoef <- function(X) {
+  estimate <- coef(X)$Family$L2prop_t[1]
+  estimate
+}
+
+d1 <- do.call(rbind, lapply(X=modImp$analyses, FUN=getcoef))
+d2 <- do.call(rbind, lapply(X=modImpIC$analyses, FUN=getcoef))
+
+g1 <- histogram(d1, type="percent", 
+                xlab=expression("Coefficient estimate for"~rho*"'"), 
+                col=mycol, par.settings=mypar1,
+                main=list("Morphological complexity", cex=1.0), nint=13)
+
+g2 <- histogram(d2, type="percent", 
+                xlab=expression("Coefficient estimate for"~rho*"'"), 
+                col=mycol, par.settings=mypar2,
+                main=list("Information-theoretic complexity", cex=1.0), nint=13)
+
+# save as pdf
+pdf("../plots/imputation.pdf", height=3, width=7)
+grid.arrange(g1, g2, nrow=1, ncol=2)
+dev.off()
+```
+
+
