@@ -1,5 +1,7 @@
 # koplenig-reply
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7752933.svg)](https://doi.org/10.5281/zenodo.7752933)
+
 This repository contains data and data analysis code for the following paper:
 
 > Kauhanen, H., Einhaus, S. & Walkden, G. (2022) Language structure is influenced by the proportion of non-native speakers: A reply to Koplenig (2019).
