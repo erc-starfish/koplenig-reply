@@ -2,7 +2,7 @@
 title: "Supplementary material"
 subtitle: "Language structure is influenced by the proportion of non-native speakers: A reply to Koplenig (2019)"
 author: "Henri Kauhanen, Sarah Einhaus & George Walkden"
-date: "15 December 2022"
+date: "16 December 2022"
 output: pdf_document
 numbersections: true
 toc: true
@@ -280,6 +280,16 @@ AIC(modb)
 ```
 
 
+## Morphological complexity, varying slopes by language family
+
+In general, inclusion of random slopes in our models leads to convergence problems, so we do not include them. An exception is the regression of morphological complexity, where we can include a random slope for L2 speaker proportion conditioned by language family if no random effect is included for linguistic area. The results are in line with the above analysis:
+
+```{r}
+modRS <- lmer(MC~L2prop+logPop+(1+L2prop|Family), data2)
+summary(modRS)
+```
+
+
 ## Morphological complexity, $\geq$ 6 features
 
 When only looking at languages in which at least 6 features are available for the determination of morphological complexity, we cannot include the same random effects structure because it leads to a singular fit:
@@ -538,16 +548,16 @@ dev.off()
 ```{r, message=FALSE, warning=FALSE}
 g1 <- plot(predictorEffect("L2prop", mod), xlab="L2 speaker proportion", 
            ylim=c(0,1), ylab="Morphological complexity", 
-           main="A                                  ")
+           main=list("A                                       ", cex=1.0))
 g2 <- plot(predictorEffect("logPop", mod), xlab="log(population size)", 
            ylim=c(0,1), ylab="Morphological complexity", 
-           main="B                                  ")
+           main=list("B                                       ", cex=1.0))
 g3 <- plot(predictorEffect("L2prop", modIC), xlab="L2 speaker proportion", 
            ylim=c(1.3, 2.0), ylab="Information-theoretic complexity", 
-           main="C                                  ")
+           main=list("C                                       ", cex=1.0))
 g4 <- plot(predictorEffect("logPop", modIC), xlab="log(population size)", 
            ylim=c(1.3, 2.0), ylab="Information-theoretic complexity", 
-           main="D                                  ")
+           main=list("D                                       ", cex=1.0))
 
 # pdf out
 pdf("../plots/result.pdf", height=7.5, width=7)
@@ -574,12 +584,12 @@ d2 <- do.call(rbind, lapply(X=modImpIC$analyses, FUN=getcoef))
 g1 <- histogram(d1, type="percent", 
                 xlab=expression("Coefficient estimate for"~rho*"'"), 
                 col=mycol, par.settings=mypar1,
-                main=list("Morphological complexity", cex=1.0), nint=13)
+                main=list("Morphological complexity", cex=1.0), nint=11)
 
 g2 <- histogram(d2, type="percent", 
                 xlab=expression("Coefficient estimate for"~rho*"'"), 
                 col=mycol, par.settings=mypar2,
-                main=list("Information-theoretic complexity", cex=1.0), nint=13)
+                main=list("Information-theoretic complexity", cex=1.0), nint=11)
 
 # save as pdf
 pdf("../plots/imputation.pdf", height=3, width=7)
